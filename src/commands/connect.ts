@@ -9,19 +9,33 @@
  * Safe to re-run — overwrites any existing connection file.
  *
  * Usage:
- *   REMEDIATION_SAAS_URL=https://saas.example.com \
- *   REMEDIATION_CONNECTION_KEY=<key from dashboard> \
+ *   Add REMEDIATION_SAAS_URL and REMEDIATION_CONNECTION_KEY to your .env, then:
  *   npx remediation-connect
  */
 
 import axios from 'axios';
-import { writeFileSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ConnectionConfig, HandshakeRequest, HandshakeResponse } from '../types/wireProtocol.js';
 
 const CONNECTION_FILE = join(process.cwd(), '.remediation-connection.json');
 
+function loadDotEnv(): void {
+  const envPath = join(process.cwd(), '.env');
+  if (!existsSync(envPath)) return;
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key   = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+    if (key && !(key in process.env)) process.env[key] = value;
+  }
+}
+
 async function main(): Promise<void> {
+  loadDotEnv();
   const saasUrl       = (process.env['REMEDIATION_SAAS_URL']       ?? '').replace(/\/+$/, '');
   const connectionKey = process.env['REMEDIATION_CONNECTION_KEY']   ?? '';
   const webhookUrl    = process.env['REMEDIATION_WEBHOOK_URL']      ?? null;
