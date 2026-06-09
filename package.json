@@ -1,5 +1,5 @@
 {
-  "name": "@shoptalk/remediation-agent",
+  "name": "@develler/remediation-agent",
   "version": "1.0.1",
   "description": "Remediation agent for Node.js/Express — real-time PII masking and automated code-fix pipeline",
   "main": "dist/index.js",
@@ -13,7 +13,8 @@
     "url": "https://github.com/Sabs19/remediation-node-package.git"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "scope": "@develler"
   },
   "license": "MIT",
   "scripts": {
