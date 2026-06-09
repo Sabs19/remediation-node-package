@@ -51,7 +51,7 @@ export function registerWebhookRoute(
       return;
     }
 
-    const messageType = String((envelope as Record<string, unknown>)['message_type'] ?? '');
+    const messageType = String((envelope as unknown as Record<string, unknown>)['message_type'] ?? '');
 
     try {
       if (messageType === 'runtime_instruction') {

@@ -47,14 +47,14 @@ export async function handleExtractionRequest(
     return;
   }
 
-  const callbackUrl = config.saasUrl.replace(/\/$/, '') + request.callback_url;
+  const callbackUrl = config.saas_url.replace(/\/$/, '') + request.callback_url;
 
   await axios.post(
     callbackUrl,
     { results },
     {
       headers: {
-        'X-Remediation-Client-Id': config.clientId,
+        'X-Remediation-Client-Id': config.client_id,
         'X-Remediation-Token':     config.token,
         'Content-Type':            'application/json',
       },

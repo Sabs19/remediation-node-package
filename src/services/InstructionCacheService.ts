@@ -54,7 +54,7 @@ export class InstructionCacheService {
     for (let i = 0; i < ids.length; i++) {
       const json = values[i];
 
-      if (json === null) {
+      if (json == null) {
         staleIds.push(ids[i] as string);
         continue;
       }

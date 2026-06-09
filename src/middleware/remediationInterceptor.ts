@@ -117,7 +117,7 @@ export class RemediationInterceptor implements LifecycleInterceptorInterface {
   // ---------------------------------------------------------------------------
 
   async interceptRequest(req: Request, res: Response): Promise<boolean>;
-  async interceptRequest(req: Request, res: Response, block: ReturnType<typeof this.connection.getActiveInstructions> extends Promise<infer T> ? T extends { matchingRouteBlock: (...args: unknown[]) => infer R } ? R : null : null): Promise<boolean>;
+  async interceptRequest(req: Request, res: Response, block: unknown): Promise<boolean>;
   async interceptRequest(req: Request, res: Response, block?: unknown): Promise<boolean> {
     // When called from the handler with a pre-resolved block:
     if (block !== undefined) {
