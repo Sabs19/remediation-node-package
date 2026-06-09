@@ -4,6 +4,7 @@ import type { LifecycleInterceptorInterface } from '../contracts/lifecycleInterc
 import type { MaskRule } from '../types/instructions.js';
 import { CircuitBreakerService } from '../services/CircuitBreakerService.js';
 import { MaskingEngine } from '../services/MaskingEngine.js';
+import { TelemetryReporterService } from '../services/TelemetryReporterService.js';
 import { logger } from '../logger.js';
 
 /**
@@ -32,6 +33,7 @@ export class RemediationInterceptor implements LifecycleInterceptorInterface {
     private readonly masker:     MaskingEngine,
     private readonly breaker:    CircuitBreakerService,
     private readonly enabled:    boolean,
+    private readonly reporter:   TelemetryReporterService | null = null,
   ) {}
 
   /** Returns an Express RequestHandler — the function registered via app.use(). */
@@ -48,7 +50,8 @@ export class RemediationInterceptor implements LifecycleInterceptorInterface {
         return;
       }
 
-      // Step 2 — load instructions from Redis.
+      // Step 2 — load instructions from Redis (measure latency for telemetry).
+      const t0 = performance.now();
       let instructions;
       try {
         instructions = await this.connection.getActiveInstructions();
@@ -57,6 +60,7 @@ export class RemediationInterceptor implements LifecycleInterceptorInterface {
         next();
         return;
       }
+      const latencyMs = performance.now() - t0;
 
       if (instructions.isEmpty()) {
         next();
@@ -75,7 +79,29 @@ export class RemediationInterceptor implements LifecycleInterceptorInterface {
         return;
       }
 
-      if (blocked) return; // Response already sent by interceptRequest.
+      if (blocked) {
+        this.reporter?.record({
+          route:            req.path,
+          method:           req.method,
+          instruction_type: 'route_block',
+          latency_ms:       Math.round(latencyMs * 1000) / 1000,
+          applied_at:       new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Determine primary instruction type for this request.
+      const instrType = instructions.hasMaskRules()                          ? 'pii_mask'
+                      : Object.keys(instructions.injectHeaders()).length > 0  ? 'header_inject'
+                      : 'pii_mask';
+
+      this.reporter?.record({
+        route:            req.path,
+        method:           req.method,
+        instruction_type: instrType,
+        latency_ms:       Math.round(latencyMs * 1000) / 1000,
+        applied_at:       new Date().toISOString(),
+      });
 
       // Step 4 — intercept res.json() before calling next().
       // We override the method here so that when the downstream route handler

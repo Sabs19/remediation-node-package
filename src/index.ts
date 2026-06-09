@@ -22,6 +22,7 @@ import { InstructionCacheService }  from './services/InstructionCacheService.js'
 import { MaskingEngine }            from './services/MaskingEngine.js';
 import { AgentConnectionService }   from './services/AgentConnectionService.js';
 import { RemediationInterceptor }   from './middleware/remediationInterceptor.js';
+import { TelemetryReporterService } from './services/TelemetryReporterService.js';
 import { registerWebhookRoute }     from './controllers/webhookController.js';
 import type { ConnectionConfig }    from './types/wireProtocol.js';
 
@@ -82,12 +83,13 @@ export async function createRemediationMiddleware(
   const redisUrl     = cfg.redisUrl           ?? (process.env['REDIS_URL'] ?? process.env['REMEDIATION_REDIS_URL'] ?? 'redis://127.0.0.1:6379');
   const connection   = cfg.connection         ?? loadConnectionConfig();
 
-  const redis   = new Redis(redisUrl, { lazyConnect: false, enableOfflineQueue: false });
-  const cache   = new InstructionCacheService(redis, connection.client_id);
-  const breaker = new CircuitBreakerService(redis, connection.client_id, cbTtl);
-  const masker  = new MaskingEngine();
-  const agentConn = new AgentConnectionService(redis, cache, connection);
-  const interceptor = new RemediationInterceptor(agentConn, masker, breaker, enabled);
+  const redis    = new Redis(redisUrl, { lazyConnect: false, enableOfflineQueue: false });
+  const cache    = new InstructionCacheService(redis, connection.client_id);
+  const breaker  = new CircuitBreakerService(redis, connection.client_id, cbTtl);
+  const masker   = new MaskingEngine();
+  const agentConn  = new AgentConnectionService(redis, cache, connection);
+  const reporter   = new TelemetryReporterService(connection);
+  const interceptor = new RemediationInterceptor(agentConn, masker, breaker, enabled, reporter);
 
   return {
     handler(): RequestHandler {
