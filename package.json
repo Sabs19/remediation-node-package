@@ -1,11 +1,11 @@
 {
   "name": "@develler/remediation-agent",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Remediation agent for Node.js/Express — real-time PII masking and automated code-fix pipeline",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".":      "./dist/index.js",
+    ".": "./dist/index.js",
     "./auto": "./dist/auto.js"
   },
   "bin": {
