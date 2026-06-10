@@ -37,7 +37,7 @@ function loadDotEnv(): void {
 async function main(): Promise<void> {
   loadDotEnv();
   const saasUrl       = (process.env['REMEDIATION_SAAS_URL']       ?? '').replace(/\/+$/, '');
-  const connectionKey = process.env['REMEDIATION_CONNECTION_KEY']   ?? '';
+  const connectionKey = process.argv[2] || process.env['REMEDIATION_CONNECTION_KEY'] || '';
   const webhookUrl    = process.env['REMEDIATION_WEBHOOK_URL']      ?? null;
 
   if (!saasUrl || !connectionKey) {
