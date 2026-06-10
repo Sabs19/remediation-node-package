@@ -98,6 +98,11 @@ export class AgentConnectionService implements AgentConnectionInterface {
         }
       }
 
+      // Evict any cached instructions that the SaaS no longer considers active
+      // (expired, revoked, or manually expired via the dashboard).
+      const activeIds = new Set(instructions.map((i) => i.instructionId));
+      await this.cache.evictAllExcept(activeIds);
+
       return new InstructionCollection(instructions);
     } catch (err) {
       logger.error('RemediationEngine: poll request failed.', {

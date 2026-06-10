@@ -82,6 +82,16 @@ export class InstructionCacheService {
     await this.redis.srem(this.indexKey, instructionId);
   }
 
+  /** Remove every cached instruction whose ID is not in `keepIds`. */
+  async evictAllExcept(keepIds: Set<string>): Promise<void> {
+    const currentIds = await this.redis.smembers(this.indexKey);
+    for (const id of currentIds) {
+      if (!keepIds.has(id)) {
+        await this.evict(id);
+      }
+    }
+  }
+
   private instructionKey(instructionId: string): string {
     return `remediation:instruction:${this.clientId}:${instructionId}`;
   }
