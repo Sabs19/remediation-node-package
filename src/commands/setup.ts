@@ -112,19 +112,33 @@ async function main(): Promise<void> {
   console.log('  [3/3] Saving connection config...');
 
   writeFileSync(CONNECTION_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
+  patchDotEnv();
 
   console.log('');
   console.log(`  Connected. client_id: ${String(config.client_id)}`);
   console.log('');
-  console.log('  Next — add to your Express entry file:');
-  console.log('');
-  console.log("    import { createRemediationMiddleware } from '@develler/remediation-agent'");
-  console.log("    const remediation = await createRemediationMiddleware()");
-  console.log("    app.use(remediation.handler())");
-  console.log('');
-  console.log('  Then restart your app.');
+  console.log('  Restart your app and the agent will be active.');
   console.log('  Add .remediation-connection.json to your .gitignore.');
   console.log('');
+}
+
+function patchDotEnv(): void {
+  const envPath  = join(process.cwd(), '.env');
+  const flag     = '--require @develler/remediation-agent/auto';
+  const existing = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+
+  if (existing.includes(flag)) return;
+
+  const nodeOptsMatch = existing.match(/^NODE_OPTIONS=(.*)$/m);
+  let updated: string;
+
+  if (nodeOptsMatch) {
+    updated = existing.replace(/^NODE_OPTIONS=(.*)$/m, `NODE_OPTIONS=$1 ${flag}`);
+  } else {
+    updated = existing.trimEnd() + (existing ? '\n' : '') + `NODE_OPTIONS=${flag}\n`;
+  }
+
+  writeFileSync(envPath, updated);
 }
 
 main().catch((err: unknown) => {
