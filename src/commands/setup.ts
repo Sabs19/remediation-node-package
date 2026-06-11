@@ -1,19 +1,40 @@
 #!/usr/bin/env node
 /**
- * npx @develler/remediation-agent <connection-key>
+ * npx @develler/remediation-agent <connection-key> [--nextjs]
  *
  * One-command setup for the Develler Remediation Agent.
- * Installs the package, performs the initial handshake, and
- * writes .remediation-connection.json at the project root.
+ *
+ * Without --nextjs (Express / Node.js):
+ *   Installs the package, performs the initial handshake, writes
+ *   .remediation-connection.json, and patches NODE_OPTIONS in .env.
+ *
+ * With --nextjs (Next.js / Vercel):
+ *   Performs the handshake, scaffolds middleware.ts and the webhook route,
+ *   and prints the env vars to copy into Vercel — no local files to secret-manage.
  */
 
 import { execSync }                          from 'child_process';
-import { writeFileSync, existsSync, readFileSync } from 'fs';
-import { join }                              from 'path';
+import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'fs';
+import { join, dirname }                     from 'path';
 import axios                                 from 'axios';
 import type { ConnectionConfig, HandshakeRequest, HandshakeResponse } from '../types/wireProtocol.js';
 
 const CONNECTION_FILE = join(process.cwd(), '.remediation-connection.json');
+
+const MIDDLEWARE_TEMPLATE = `import { createNextjsMiddleware } from '@develler/remediation-agent/nextjs'
+
+export const middleware = createNextjsMiddleware()
+
+export const config = {
+  matcher: '/api/:path*',
+}
+`;
+
+const WEBHOOK_TEMPLATE = `import { handleRemediationWebhook } from '@develler/remediation-agent/nextjs'
+
+export const POST = handleRemediationWebhook
+export const runtime = 'nodejs'
+`;
 
 function loadDotEnv(): void {
   const envPath = join(process.cwd(), '.env');
@@ -32,12 +53,14 @@ function loadDotEnv(): void {
 async function main(): Promise<void> {
   loadDotEnv();
 
-  const connectionKey = process.argv[2] || process.env['REMEDIATION_CONNECTION_KEY'] || '';
+  const args          = process.argv.slice(2);
+  const isNextjs      = args.includes('--nextjs');
+  const connectionKey = args.find((a) => !a.startsWith('--')) ?? process.env['REMEDIATION_CONNECTION_KEY'] ?? '';
   const saasUrl       = (process.env['REMEDIATION_SAAS_URL'] ?? 'https://app.develler.io').replace(/\/+$/, '');
 
   if (!connectionKey) {
     console.error('');
-    console.error('  Usage: npx @develler/remediation-agent <connection-key>');
+    console.error('  Usage: npx @develler/remediation-agent <connection-key> [--nextjs]');
     console.error('');
     console.error('  Your connection key is on the Develler dashboard under Setup.');
     console.error('');
@@ -59,21 +82,21 @@ async function main(): Promise<void> {
 
   const payload: HandshakeRequest = {
     connection_key:    connectionKey,
-    site_url:          process.env['APP_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`,
+    site_url:          process.env['NEXT_PUBLIC_URL'] ?? process.env['APP_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`,
     site_name:         process.env['APP_NAME'] ?? null,
     language_runtime:  'node',
     runtime_version:   process.version,
-    framework:         process.env['REMEDIATION_FRAMEWORK'] ?? 'express',
+    framework:         isNextjs ? 'nextjs' : (process.env['REMEDIATION_FRAMEWORK'] ?? 'express'),
     framework_version: process.env['REMEDIATION_FRAMEWORK_VERSION'] ?? null,
     agent_version:     null,
     environment:       (process.env['NODE_ENV'] ?? 'production') as 'local' | 'staging' | 'production',
     capabilities: {
       mode_a_ast:         false,
       mode_b_interceptor: true,
-      redis_available:    false,
+      redis_available:    isNextjs,
       git_access:         false,
     },
-    webhook_url: null,
+    webhook_url: isNextjs ? '/api/remediation/v1/webhook' : null,
   };
 
   let response: HandshakeResponse;
@@ -109,16 +132,63 @@ async function main(): Promise<void> {
   };
 
   console.log('');
-  console.log('  [3/3] Saving connection config...');
 
-  writeFileSync(CONNECTION_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
-  patchDotEnv();
+  if (isNextjs) {
+    scaffoldNextjs(config, saasUrl);
+  } else {
+    console.log('  [3/3] Saving connection config...');
+    writeFileSync(CONNECTION_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
+    patchDotEnv();
+
+    console.log('');
+    console.log(`  Connected. client_id: ${String(config.client_id)}`);
+    console.log('');
+    console.log('  Restart your app and the agent will be active.');
+    console.log('  Add .remediation-connection.json to your .gitignore.');
+    console.log('');
+  }
+}
+
+function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
+  console.log('  [3/3] Scaffolding files...');
+  console.log('');
+
+  const root          = process.cwd();
+  const middlewarePath = join(root, 'middleware.ts');
+  const webhookDir    = join(root, 'app', 'api', 'remediation', 'v1', 'webhook');
+  const webhookPath   = join(webhookDir, 'route.ts');
+
+  // middleware.ts at project root
+  if (existsSync(middlewarePath)) {
+    console.log('  middleware.ts already exists — skipping (add the import manually if needed).');
+  } else {
+    writeFileSync(middlewarePath, MIDDLEWARE_TEMPLATE);
+    console.log('  Created: middleware.ts');
+  }
+
+  // app/api/remediation/v1/webhook/route.ts
+  mkdirSync(webhookDir, { recursive: true });
+  if (existsSync(webhookPath)) {
+    console.log('  app/api/remediation/v1/webhook/route.ts already exists — skipping.');
+  } else {
+    writeFileSync(webhookPath, WEBHOOK_TEMPLATE);
+    console.log('  Created: app/api/remediation/v1/webhook/route.ts');
+  }
 
   console.log('');
-  console.log(`  Connected. client_id: ${String(config.client_id)}`);
+  console.log('  ─────────────────────────────────────────────────────');
+  console.log('  Add these to Vercel → Settings → Environment Variables');
+  console.log('  ─────────────────────────────────────────────────────');
   console.log('');
-  console.log('  Restart your app and the agent will be active.');
-  console.log('  Add .remediation-connection.json to your .gitignore.');
+  console.log(`  REMEDIATION_SAAS_URL=${saasUrl}`);
+  console.log(`  REMEDIATION_CLIENT_ID=${String(config.client_id)}`);
+  console.log(`  REMEDIATION_TOKEN=${config.token}`);
+  console.log('  UPSTASH_REDIS_REST_URL=      ← from Vercel × Upstash integration');
+  console.log('  UPSTASH_REDIS_REST_TOKEN=    ← from Vercel × Upstash integration');
+  console.log('');
+  console.log('  ─────────────────────────────────────────────────────');
+  console.log('  Then commit, push, and deploy. Your app is protected.');
+  console.log('  ─────────────────────────────────────────────────────');
   console.log('');
 }
 
