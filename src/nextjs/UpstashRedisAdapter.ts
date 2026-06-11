@@ -8,6 +8,22 @@
  * All commands go through the Upstash REST pipeline endpoint for efficiency.
  */
 
+/** Common interface implemented by both UpstashRedisAdapter and InMemoryRedisAdapter. */
+export interface RedisAdapter {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ex: number): Promise<void>;
+  setNx(key: string, value: string, ex: number): Promise<boolean>;
+  del(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  ttl(key: string): Promise<number>;
+  expire(key: string, seconds: number): Promise<void>;
+  smembers(key: string): Promise<string[]>;
+  sadd(key: string, members: string[]): Promise<void>;
+  srem(key: string, members: string[]): Promise<void>;
+  mget(keys: string[]): Promise<Array<string | null>>;
+  pipeline(commands: [string, ...string[]][]): Promise<unknown[]>;
+}
+
 export interface UpstashConfig {
   readonly url:   string;  // UPSTASH_REDIS_REST_URL
   readonly token: string;  // UPSTASH_REDIS_REST_TOKEN
@@ -20,7 +36,7 @@ interface UpstashResult {
   error?: string;
 }
 
-export class UpstashRedisAdapter {
+export class UpstashRedisAdapter implements RedisAdapter {
   constructor(private readonly cfg: UpstashConfig) {}
 
   // ── Single command ──────────────────────────────────────────────────────────
@@ -133,16 +149,34 @@ export class UpstashRedisAdapter {
   }
 }
 
-// ── Factory ──────────────────────────────────────────────────────────────────
+// ── Factories ─────────────────────────────────────────────────────────────────
 
+/**
+ * Returns an Upstash adapter if UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+ * are set, otherwise falls back to the in-memory adapter.
+ *
+ * Use this in all Next.js interceptor code — never throw on missing Upstash config.
+ */
+export async function createRedisAdapter(): Promise<RedisAdapter> {
+  const url   = process.env['UPSTASH_REDIS_REST_URL']   ?? '';
+  const token = process.env['UPSTASH_REDIS_REST_TOKEN'] ?? '';
+
+  if (url && token) {
+    return new UpstashRedisAdapter({ url, token });
+  }
+
+  const { createInMemoryAdapter } = await import('./InMemoryRedisAdapter.js');
+  return createInMemoryAdapter();
+}
+
+/** @deprecated Use createRedisAdapter() instead. */
 export function createUpstashAdapter(): UpstashRedisAdapter {
   const url   = process.env['UPSTASH_REDIS_REST_URL']   ?? '';
   const token = process.env['UPSTASH_REDIS_REST_TOKEN'] ?? '';
 
   if (!url || !token) {
     throw new Error(
-      '[Develler] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set. ' +
-      'Add Upstash Redis from the Vercel marketplace and these vars will be injected automatically.',
+      '[Develler] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set.',
     );
   }
 

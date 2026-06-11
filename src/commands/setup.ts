@@ -153,10 +153,10 @@ function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
   console.log('  [3/3] Scaffolding files...');
   console.log('');
 
-  const root          = process.cwd();
+  const root           = process.cwd();
   const middlewarePath = join(root, 'middleware.ts');
-  const webhookDir    = join(root, 'app', 'api', 'remediation', 'v1', 'webhook');
-  const webhookPath   = join(webhookDir, 'route.ts');
+  const webhookDir     = join(root, 'app', 'api', 'remediation', 'v1', 'webhook');
+  const webhookPath    = join(webhookDir, 'route.ts');
 
   // middleware.ts at project root
   if (existsSync(middlewarePath)) {
@@ -175,21 +175,45 @@ function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
     console.log('  Created: app/api/remediation/v1/webhook/route.ts');
   }
 
+  // Write credentials to .env.local for local dev
+  patchNextjsEnv(config, saasUrl);
+  console.log('  Written to .env.local');
+
   console.log('');
-  console.log('  ─────────────────────────────────────────────────────');
-  console.log('  Add these to Vercel → Settings → Environment Variables');
-  console.log('  ─────────────────────────────────────────────────────');
+  console.log('  ─────────────────────────────────────────────────────────────');
+  console.log('  Add these 3 vars to your production environment:');
+  console.log('  ─────────────────────────────────────────────────────────────');
   console.log('');
   console.log(`  REMEDIATION_SAAS_URL=${saasUrl}`);
   console.log(`  REMEDIATION_CLIENT_ID=${String(config.client_id)}`);
   console.log(`  REMEDIATION_TOKEN=${config.token}`);
-  console.log('  UPSTASH_REDIS_REST_URL=      ← from Vercel × Upstash integration');
-  console.log('  UPSTASH_REDIS_REST_TOKEN=    ← from Vercel × Upstash integration');
   console.log('');
-  console.log('  ─────────────────────────────────────────────────────');
-  console.log('  Then commit, push, and deploy. Your app is protected.');
-  console.log('  ─────────────────────────────────────────────────────');
+  console.log('  Then commit middleware.ts and the webhook route, and deploy.');
+  console.log('  ─────────────────────────────────────────────────────────────');
   console.log('');
+}
+
+function patchNextjsEnv(config: ConnectionConfig, saasUrl: string): void {
+  const envPath  = join(process.cwd(), '.env.local');
+  const existing = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+
+  const vars: Record<string, string> = {
+    REMEDIATION_SAAS_URL:  saasUrl,
+    REMEDIATION_CLIENT_ID: String(config.client_id),
+    REMEDIATION_TOKEN:     config.token,
+  };
+
+  let updated = existing.trimEnd();
+
+  for (const [key, value] of Object.entries(vars)) {
+    if (new RegExp(`^${key}=`, 'm').test(updated)) {
+      updated = updated.replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${value}`);
+    } else {
+      updated += (updated ? '\n' : '') + `${key}=${value}`;
+    }
+  }
+
+  writeFileSync(envPath, updated + '\n');
 }
 
 function patchDotEnv(): void {

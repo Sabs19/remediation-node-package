@@ -13,7 +13,7 @@
 
 import { InstructionCollection, RuntimeInstruction } from '../types/instructions.js';
 import type { ConnectionConfig, WireEnvelope, WireRuntimeInstructionPayload } from '../types/wireProtocol.js';
-import type { UpstashRedisAdapter } from './UpstashRedisAdapter.js';
+import type { RedisAdapter } from './UpstashRedisAdapter.js';
 
 const POLL_INTERVAL_SECONDS = 30;
 
@@ -22,7 +22,7 @@ export class InstructionFetcher {
   private readonly pollMarkerKey: string;
 
   constructor(
-    private readonly redis:      UpstashRedisAdapter,
+    private readonly redis:      RedisAdapter,
     private readonly connection: ConnectionConfig,
   ) {
     this.indexKey      = `remediation:active:${connection.client_id}`;

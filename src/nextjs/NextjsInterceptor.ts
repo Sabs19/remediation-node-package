@@ -28,7 +28,7 @@ import { InstructionCollection, RuntimeInstruction } from '../types/instructions
 import type { RouteBlock } from '../types/instructions.js';
 import type { ConnectionConfig, WireEnvelope, WireRuntimeInstructionPayload } from '../types/wireProtocol.js';
 import { InstructionFetcher } from './InstructionFetcher.js';
-import { createUpstashAdapter } from './UpstashRedisAdapter.js';
+import { createRedisAdapter } from './UpstashRedisAdapter.js';
 
 // ── Connection config loader ──────────────────────────────────────────────────
 
@@ -95,7 +95,7 @@ function routeBlocksFrom(collection: InstructionCollection): RouteBlock[] {
 
 async function isCircuitOpen(clientId: string): Promise<boolean> {
   try {
-    const redis = createUpstashAdapter();
+    const redis = await createRedisAdapter();
     return redis.exists(`remediation:circuit_breaker:${clientId}`);
   } catch {
     return false;
@@ -138,7 +138,7 @@ export function createNextjsMiddleware(
         return NextResponse.next();
       }
 
-      const redis   = createUpstashAdapter();
+      const redis   = await createRedisAdapter();
       const fetcher = new InstructionFetcher(redis, connection);
       const instructions = await fetcher.getActive();
 
@@ -203,7 +203,7 @@ export function withRemediation(handler: AppRouterHandler): AppRouterHandler {
     try {
       if (await isCircuitOpen(connection.client_id)) return original;
 
-      const redis        = createUpstashAdapter();
+      const redis        = await createRedisAdapter();
       const fetcher      = new InstructionFetcher(redis, connection);
       const instructions = await fetcher.getActive();
 
@@ -299,7 +299,7 @@ export async function handleRemediationWebhook(req: NextRequest): Promise<Respon
     }
 
     // Nonce deduplication.
-    const redis    = createUpstashAdapter();
+    const redis    = await createRedisAdapter();
     const nonceKey = `remediation:nonce:${connection.client_id}:${envelope.nonce}`;
     const isNew    = await redis.setNx(nonceKey, '1', 300);
 
