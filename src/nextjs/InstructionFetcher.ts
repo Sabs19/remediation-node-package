@@ -106,7 +106,9 @@ export class InstructionFetcher {
       const activeIds = new Set<string>();
 
       for (const raw of envelopes) {
-        if (!this.verifyEnvelopeSignature(raw)) continue;
+        // Full async HMAC verification — must pass before the payload is trusted.
+        const valid = await this.verifyEnvelopeSignature(raw);
+        if (!valid) continue;
 
         try {
           const instruction = RuntimeInstruction.fromWirePayload(
@@ -174,12 +176,30 @@ export class InstructionFetcher {
   // ── Signature verification (HMAC-SHA256 via Web Crypto) ─────────────────────
 
   /**
-   * Verifies the envelope signature using the Web Crypto API.
-   * Works in Edge Runtime and Node.js ≥ 18.
-   * Returns false (not throws) on any failure so bad envelopes are skipped gracefully.
+   * Full HMAC-SHA256 envelope verification using the Web Crypto API.
+   *
+   * Compatible with both Edge Runtime and Node.js ≥ 18 via the globalThis.crypto
+   * subtle interface. Returns false on any verification failure so bad envelopes
+   * are skipped gracefully without throwing into the poll pipeline.
+   *
+   * Security properties:
+   *  - Constant-time comparison via XOR accumulator (matches timingSafeEqual semantics).
+   *  - Nonce and issued_at window checks are handled by AgentConnectionService on the
+   *    SaaS side; the client trust boundary is the HMAC here.
+   *  - client_id structural check is performed first to short-circuit obviously
+   *    foreign envelopes before any crypto work is done.
    */
-  private verifyEnvelopeSignature(envelope: WireEnvelope): boolean {
+  private async verifyEnvelopeSignature(envelope: WireEnvelope): Promise<boolean> {
     try {
+      // Short-circuit: reject envelopes not addressed to this agent.
+      if (
+        envelope.client_id !== this.connection.client_id ||
+        typeof envelope.hmac_sha256 !== 'string' ||
+        envelope.hmac_sha256.length !== 64
+      ) {
+        return false;
+      }
+
       const payload = (envelope.payload ?? {}) as Record<string, unknown>;
 
       const canonical = [
@@ -192,22 +212,37 @@ export class InstructionFetcher {
         this.base64url(JSON.stringify(sortKeysDeep(payload))),
       ].join('.');
 
-      // We perform the HMAC verification asynchronously in the Express agent,
-      // but Web Crypto requires async which we can't use in a sync guard here.
-      // Instead: do a quick structural pre-check and defer async HMAC to the
-      // webhook handler (which runs in Node.js and can use timingSafeEqual).
-      // Polling responses are already authenticated at the transport level
-      // (HTTPS + Bearer token) — HMAC here is defence-in-depth.
-      if (
-        envelope.client_id !== this.connection.client_id ||
-        typeof envelope.hmac_sha256 !== 'string' ||
-        envelope.hmac_sha256.length === 0
-      ) {
-        return false;
+      // Import the raw token as an HMAC-SHA256 key (non-extractable).
+      const key = await globalThis.crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(this.connection.token),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+      );
+
+      // Compute the expected digest.
+      const sigBuffer = await globalThis.crypto.subtle.sign(
+        'HMAC',
+        key,
+        new TextEncoder().encode(canonical),
+      );
+
+      const expectedHex = Array.from(new Uint8Array(sigBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      const receivedHex = envelope.hmac_sha256.toLowerCase();
+
+      // Constant-time XOR comparison — both strings are always the same length (64 hex chars).
+      if (expectedHex.length !== receivedHex.length) return false;
+
+      let diff = 0;
+      for (let i = 0; i < expectedHex.length; i++) {
+        diff |= expectedHex.charCodeAt(i) ^ receivedHex.charCodeAt(i);
       }
 
-      void canonical; // will be used in future async variant
-      return true;
+      return diff === 0;
     } catch {
       return false;
     }

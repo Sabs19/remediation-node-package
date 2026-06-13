@@ -2,19 +2,20 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MaskingEngine } from '../../src/services/MaskingEngine.js';
 import { MaskRule } from '../../src/types/instructions.js';
+import type { MaskStrategy } from '../../src/types/wireProtocol.js';
 
 const engine = new MaskingEngine();
 
 function rule(key: string, strategy: string, matchType: 'exact' | 'regex' = 'exact'): MaskRule {
-  return new MaskRule({
-    rule_id:       'test-rule',
-    key,
-    match_type:    matchType,
-    mask_strategy: strategy,
-    pattern:       matchType === 'regex' ? key : null,
-    mask_char:     '*',
-    separator:     '',
-  });
+  return new MaskRule(
+    'test-rule',                              // ruleId
+    key,                                      // key
+    matchType,                                // matchType
+    strategy as MaskStrategy,
+    matchType === 'regex' ? key : null,       // pattern
+    '*',                                      // maskChar
+    '',                                       // separator
+  );
 }
 
 describe('MaskingEngine', () => {
