@@ -18,6 +18,7 @@ import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'fs';
 import { join, dirname }                     from 'path';
 import axios                                 from 'axios';
 import type { ConnectionConfig, HandshakeRequest, HandshakeResponse } from '../types/wireProtocol.js';
+import { resolveNextjsSiteUrl, resolveNextjsWebhookUrl } from './nextjsUrls.js';
 
 const CONNECTION_FILE = join(process.cwd(), '.remediation-connection.json');
 
@@ -80,9 +81,13 @@ async function main(): Promise<void> {
   console.log('');
   console.log(`  [2/3] Connecting to ${saasUrl}...`);
 
+  const siteUrl = isNextjs
+    ? resolveNextjsSiteUrl(process.env)
+    : process.env['NEXT_PUBLIC_URL'] ?? process.env['APP_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`;
+
   const payload: HandshakeRequest = {
     connection_key:    connectionKey,
-    site_url:          process.env['NEXT_PUBLIC_URL'] ?? process.env['APP_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`,
+    site_url:          siteUrl,
     site_name:         process.env['APP_NAME'] ?? null,
     language_runtime:  'node',
     runtime_version:   process.version,
@@ -96,7 +101,7 @@ async function main(): Promise<void> {
       redis_available:    isNextjs,
       git_access:         false,
     },
-    webhook_url: isNextjs ? '/api/remediation/v1/webhook' : null,
+    webhook_url: isNextjs ? resolveNextjsWebhookUrl(siteUrl) : null,
   };
 
   let response: HandshakeResponse;
