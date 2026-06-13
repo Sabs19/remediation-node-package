@@ -56,7 +56,7 @@ async function main(): Promise<void> {
     framework:         process.env['REMEDIATION_FRAMEWORK'] ?? 'express',
     framework_version: process.env['REMEDIATION_FRAMEWORK_VERSION'] ?? null,
     agent_version:     process.env['npm_package_version'] ?? null,
-    environment:       (process.env['NODE_ENV'] ?? 'production') as 'local' | 'staging' | 'production',
+    environment:       ((process.env['NODE_ENV'] === 'development' ? 'local' : (process.env['NODE_ENV'] ?? 'production'))) as 'local' | 'staging' | 'production',
     capabilities: {
       mode_a_ast:         false,
       mode_b_interceptor: true,
