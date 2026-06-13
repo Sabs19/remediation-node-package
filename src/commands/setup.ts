@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   const args          = process.argv.slice(2);
   const isNextjs      = args.includes('--nextjs');
   const connectionKey = args.find((a) => !a.startsWith('--')) ?? process.env['REMEDIATION_CONNECTION_KEY'] ?? '';
-  const saasUrl       = (process.env['REMEDIATION_SAAS_URL'] ?? 'https://app.develler.io').replace(/\/+$/, '');
+  const saasUrl       = (process.env['REMEDIATION_SAAS_URL'] ?? 'https://vl3pdsjqcoz1dvp5dybhc4qf.82.29.164.83.sslip.io').replace(/\/+$/, '');
 
   if (!connectionKey) {
     console.error('');
