@@ -29,6 +29,7 @@ import type { RouteBlock } from '../types/instructions.js';
 import type { ConnectionConfig, WireEnvelope, WireRuntimeInstructionPayload } from '../types/wireProtocol.js';
 import { InstructionFetcher } from './InstructionFetcher.js';
 import { createRedisAdapter } from './UpstashRedisAdapter.js';
+import { resolveNextjsSiteUrl, resolveNextjsWebhookUrl } from '../commands/nextjsUrls.js';
 
 // ── Connection config loader ──────────────────────────────────────────────────
 
@@ -54,6 +55,34 @@ function loadConnection(): ConnectionConfig {
     poll_interval_seconds: 30,
     connected_at:          new Date().toISOString(),
   };
+}
+
+// ── URL sync (fires once per cold start) ─────────────────────────────────────
+//
+// On Vercel each deploy gets a new URL. The setup command runs locally so
+// it registers localhost. We detect the real URL from Vercel env vars and
+// PATCH the SaaS on first middleware execution so the dashboard always shows
+// the live URL.
+
+let _urlSynced = false;
+
+function syncSiteUrl(connection: ConnectionConfig): void {
+  if (_urlSynced) return;
+  _urlSynced = true;
+
+  const siteUrl    = resolveNextjsSiteUrl(process.env);
+  const webhookUrl = resolveNextjsWebhookUrl(siteUrl);
+
+  // Fire-and-forget — never block a request.
+  void fetch(`${connection.saas_url}/api/remediation/v1/agent`, {
+    method:  'PATCH',
+    headers: {
+      'Content-Type':             'application/json',
+      'X-Remediation-Client-Id':  connection.client_id,
+      'X-Remediation-Token':      connection.token,
+    },
+    body: JSON.stringify({ site_url: siteUrl, webhook_url: webhookUrl }),
+  }).catch(() => { /* best effort */ });
 }
 
 // ── Route matching (framework-agnostic) ───────────────────────────────────────
@@ -132,6 +161,8 @@ export function createNextjsMiddleware(
       // Misconfigured — pass through silently so the app still works.
       return NextResponse.next();
     }
+
+    syncSiteUrl(connection);
 
     try {
       if (await isCircuitOpen(connection.client_id)) {
