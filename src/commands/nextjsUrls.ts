@@ -6,7 +6,8 @@ export function resolveNextjsSiteUrl(env: NodeJS.ProcessEnv): string {
     return configuredUrl.replace(/\/+$/, '');
   }
 
-  const vercelUrl = env['VERCEL_PROJECT_PRODUCTION_URL'] ?? env['VERCEL_URL'];
+  // VERCEL_URL is deployment-specific (changes every deploy) — don't use it.
+  const vercelUrl = env['VERCEL_PROJECT_PRODUCTION_URL'];
   if (vercelUrl) {
     return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
   }

@@ -289,6 +289,8 @@ export async function handleRemediationWebhook(req: NextRequest): Promise<Respon
     return Response.json({ error: 'Agent not configured.' }, { status: 503 });
   }
 
+  syncSiteUrl(connection);
+
   let body: unknown;
   try {
     body = await req.json();

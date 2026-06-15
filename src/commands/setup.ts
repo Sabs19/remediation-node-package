@@ -172,7 +172,13 @@ function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
 
   // middleware.ts at project root
   if (existsSync(middlewarePath)) {
-    console.log('  middleware.ts already exists — skipping (add the import manually if needed).');
+    console.log('  ⚠  middleware.ts already exists — skipping.');
+    console.log('     Without the wrapper, the agent cannot sync your live URL with the dashboard.');
+    console.log('     Add this to your middleware.ts:');
+    console.log('');
+    console.log('       import { createNextjsMiddleware } from \'@develler/remediation-agent/nextjs\'');
+    console.log('       export const middleware = createNextjsMiddleware()');
+    console.log('');
   } else {
     writeFileSync(middlewarePath, MIDDLEWARE_TEMPLATE);
     console.log('  Created: middleware.ts');
