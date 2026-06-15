@@ -1,6 +1,6 @@
 {
   "name": "@develler/remediation-agent",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Remediation agent for Node.js/Express and Next.js/Vercel — real-time PII masking and automated code-fix pipeline",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
