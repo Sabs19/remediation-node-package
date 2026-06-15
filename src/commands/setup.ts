@@ -154,13 +154,20 @@ async function main(): Promise<void> {
   }
 }
 
+function resolveAppDir(root: string): string {
+  const srcApp = join(root, 'src', 'app');
+  if (existsSync(srcApp)) return srcApp;
+  return join(root, 'app');
+}
+
 function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
   console.log('  [3/3] Scaffolding files...');
   console.log('');
 
   const root           = process.cwd();
   const middlewarePath = join(root, 'middleware.ts');
-  const webhookDir     = join(root, 'app', 'api', 'remediation', 'v1', 'webhook');
+  const appDir         = resolveAppDir(root);
+  const webhookDir     = join(appDir, 'api', 'remediation', 'v1', 'webhook');
   const webhookPath    = join(webhookDir, 'route.ts');
 
   // middleware.ts at project root
@@ -171,13 +178,14 @@ function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
     console.log('  Created: middleware.ts');
   }
 
-  // app/api/remediation/v1/webhook/route.ts
+  // {src/}app/api/remediation/v1/webhook/route.ts
   mkdirSync(webhookDir, { recursive: true });
+  const relPath = webhookPath.replace(root + '/', '');
   if (existsSync(webhookPath)) {
-    console.log('  app/api/remediation/v1/webhook/route.ts already exists — skipping.');
+    console.log(`  ${relPath} already exists — skipping.`);
   } else {
     writeFileSync(webhookPath, WEBHOOK_TEMPLATE);
-    console.log('  Created: app/api/remediation/v1/webhook/route.ts');
+    console.log(`  Created: ${relPath}`);
   }
 
   // Write credentials to .env.local for local dev
