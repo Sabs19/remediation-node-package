@@ -51,10 +51,61 @@ function loadDotEnv(): void {
   }
 }
 
+async function syncUrl(): Promise<void> {
+  const saasUrl  = (process.env['REMEDIATION_SAAS_URL']  ?? '').replace(/\/+$/, '');
+  const clientId = process.env['REMEDIATION_CLIENT_ID']  ?? '';
+  const token    = process.env['REMEDIATION_TOKEN']      ?? '';
+
+  if (!saasUrl || !clientId || !token) {
+    console.error('');
+    console.error('  Missing required env vars: REMEDIATION_SAAS_URL, REMEDIATION_CLIENT_ID, REMEDIATION_TOKEN');
+    console.error('  Set them before running this command, e.g.:');
+    console.error('  NEXT_PUBLIC_URL=https://example.com REMEDIATION_SAAS_URL=... npx @develler/remediation-agent sync-url');
+    console.error('');
+    process.exit(1);
+  }
+
+  const siteUrl    = resolveNextjsSiteUrl(process.env);
+  const webhookUrl = resolveNextjsWebhookUrl(siteUrl);
+
+  console.log('');
+  console.log(`  Site URL:    ${siteUrl}`);
+  console.log(`  Webhook URL: ${webhookUrl}`);
+  console.log('');
+
+  try {
+    await axios.patch(
+      `${saasUrl}/api/remediation/v1/agent`,
+      { site_url: siteUrl, webhook_url: webhookUrl },
+      {
+        headers: {
+          'Content-Type':             'application/json',
+          'X-Remediation-Client-Id':  clientId,
+          'X-Remediation-Token':      token,
+        },
+        timeout: 10000,
+      },
+    );
+    console.log('  Done. Dashboard URL updated.');
+    console.log('');
+  } catch (err) {
+    const message = axios.isAxiosError(err)
+      ? `HTTP ${err.response?.status ?? 'timeout'}: ${JSON.stringify(err.response?.data)}`
+      : String(err);
+    console.error(`  Sync failed: ${message}`);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   loadDotEnv();
 
   const args          = process.argv.slice(2);
+
+  if (args[0] === 'sync-url') {
+    await syncUrl();
+    return;
+  }
   const isNextjs      = args.includes('--nextjs');
   const connectionKey = args.find((a) => !a.startsWith('--')) ?? process.env['REMEDIATION_CONNECTION_KEY'] ?? '';
   const saasUrl       = (process.env['REMEDIATION_SAAS_URL'] ?? 'https://vl3pdsjqcoz1dvp5dybhc4qf.82.29.164.83.sslip.io').replace(/\/+$/, '');
