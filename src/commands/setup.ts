@@ -246,24 +246,30 @@ function scaffoldNextjs(config: ConnectionConfig, saasUrl: string): void {
   }
 
   // Write credentials to .env.local for local dev
-  patchNextjsEnv(config, saasUrl);
-  console.log('  Written to .env.local');
+  const credsUnchanged = patchNextjsEnv(config, saasUrl);
+  console.log(credsUnchanged ? '  .env.local unchanged' : '  Written to .env.local');
 
   console.log('');
   console.log('  ─────────────────────────────────────────────────────────────');
-  console.log('  Add these 3 vars to your production environment:');
-  console.log('  ─────────────────────────────────────────────────────────────');
-  console.log('');
-  console.log(`  REMEDIATION_SAAS_URL=${saasUrl}`);
-  console.log(`  REMEDIATION_CLIENT_ID=${String(config.client_id)}`);
-  console.log(`  REMEDIATION_TOKEN=${config.token}`);
-  console.log('');
-  console.log('  Then commit middleware.ts and the webhook route, and deploy.');
+
+  if (credsUnchanged) {
+    console.log('  Reinstall complete — your production env vars are unchanged.');
+  } else {
+    console.log('  Add these 3 vars to your production environment:');
+    console.log('  ─────────────────────────────────────────────────────────────');
+    console.log('');
+    console.log(`  REMEDIATION_SAAS_URL=${saasUrl}`);
+    console.log(`  REMEDIATION_CLIENT_ID=${String(config.client_id)}`);
+    console.log(`  REMEDIATION_TOKEN=${config.token}`);
+    console.log('');
+    console.log('  Then commit middleware.ts and the webhook route, and deploy.');
+  }
+
   console.log('  ─────────────────────────────────────────────────────────────');
   console.log('');
 }
 
-function patchNextjsEnv(config: ConnectionConfig, saasUrl: string): void {
+function patchNextjsEnv(config: ConnectionConfig, saasUrl: string): boolean {
   const envPath  = join(process.cwd(), '.env.local');
   const existing = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
 
@@ -272,6 +278,10 @@ function patchNextjsEnv(config: ConnectionConfig, saasUrl: string): void {
     REMEDIATION_CLIENT_ID: String(config.client_id),
     REMEDIATION_TOKEN:     config.token,
   };
+
+  const unchanged = Object.entries(vars).every(([key, value]) =>
+    new RegExp(`^${key}=${value}$`, 'm').test(existing),
+  );
 
   let updated = existing.trimEnd();
 
@@ -284,6 +294,7 @@ function patchNextjsEnv(config: ConnectionConfig, saasUrl: string): void {
   }
 
   writeFileSync(envPath, updated + '\n');
+  return unchanged;
 }
 
 function patchDotEnv(): void {
